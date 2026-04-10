@@ -5,7 +5,11 @@ let freighterApiPromise;
 
 async function loadFreighterApi() {
   if (!freighterApiPromise) {
-    freighterApiPromise = import("@stellar/freighter-api");
+    freighterApiPromise = import("@stellar/freighter-api").then((mod) => {
+      // Support both ESM named exports and CJS default export shapes.
+      const api = mod?.default && typeof mod.default === "object" ? mod.default : mod;
+      return api;
+    });
   }
   return freighterApiPromise;
 }
@@ -21,13 +25,37 @@ export function useFreighter() {
     setError(null);
 
     try {
-      const { isConnected, getPublicKey } = await loadFreighterApi();
-      const connected = await isConnected();
+      const freighterApi = await loadFreighterApi();
+
+      const hasIsConnected = typeof freighterApi?.isConnected === "function";
+      const hasIsAllowed = typeof freighterApi?.isAllowed === "function";
+
+      let connected = true;
+      if (hasIsConnected) {
+        connected = await freighterApi.isConnected();
+      } else if (hasIsAllowed) {
+        connected = await freighterApi.isAllowed();
+      }
+
       if (!connected) {
         throw new Error("Freighter extension is not available");
       }
 
-      const key = await getPublicKey();
+      let key = null;
+      if (typeof freighterApi?.getPublicKey === "function") {
+        key = await freighterApi.getPublicKey();
+      } else if (typeof freighterApi?.getAddress === "function") {
+        const addressResult = await freighterApi.getAddress();
+        key =
+          typeof addressResult === "string"
+            ? addressResult
+            : addressResult?.address || addressResult?.publicKey || null;
+      }
+
+      if (!key) {
+        throw new Error("Unable to read account address from Freighter");
+      }
+
       const walletBalance = await getBalance(key);
       setPublicKey(key);
       setBalance(walletBalance);
@@ -59,6 +87,9 @@ export function useFreighter() {
 
   const signTransaction = useCallback(async (...args) => {
     const freighterApi = await loadFreighterApi();
+    if (typeof freighterApi?.signTransaction !== "function") {
+      throw new Error("Freighter signTransaction is unavailable");
+    }
     return freighterApi.signTransaction(...args);
   }, []);
 

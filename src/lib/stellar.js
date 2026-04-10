@@ -49,9 +49,21 @@ export async function sendPayment({
     .setTimeout(30)
     .build();
 
-  const signedXDR = await signTransaction(transaction.toXDR(), {
+  const signedResult = await signTransaction(transaction.toXDR(), {
     networkPassphrase: StellarSdk.Networks.TESTNET,
   });
+
+  const signedXDR =
+    typeof signedResult === "string"
+      ? signedResult
+      : signedResult?.signedTxXdr ||
+        signedResult?.signedXDR ||
+        signedResult?.xdr ||
+        null;
+
+  if (!signedXDR) {
+    throw new Error("Freighter did not return a signed transaction XDR");
+  }
 
   const signedTx = StellarSdk.TransactionBuilder.fromXDR(
     signedXDR,

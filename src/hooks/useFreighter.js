@@ -14,6 +14,43 @@ async function loadFreighterApi() {
   return freighterApiPromise;
 }
 
+function pickBoolean(result, key) {
+  if (typeof result === "boolean") {
+    return result;
+  }
+  if (result && typeof result === "object" && key in result) {
+    return Boolean(result[key]);
+  }
+  return false;
+}
+
+function pickErrorMessage(result) {
+  if (!result || typeof result !== "object") {
+    return null;
+  }
+  const apiError = result.error;
+  if (!apiError) {
+    return null;
+  }
+  if (typeof apiError === "string") {
+    return apiError;
+  }
+  if (typeof apiError?.message === "string" && apiError.message) {
+    return apiError.message;
+  }
+  return "Freighter returned an unexpected error";
+}
+
+function pickAddress(result) {
+  if (typeof result === "string") {
+    return result;
+  }
+  if (!result || typeof result !== "object") {
+    return "";
+  }
+  return result.address || result.publicKey || "";
+}
+
 export function useFreighter() {
   const [publicKey, setPublicKey] = useState(null);
   const [balance, setBalance] = useState(null);
@@ -27,29 +64,50 @@ export function useFreighter() {
     try {
       const freighterApi = await loadFreighterApi();
 
-      const hasIsConnected = typeof freighterApi?.isConnected === "function";
-      const hasIsAllowed = typeof freighterApi?.isAllowed === "function";
-
       let connected = true;
-      if (hasIsConnected) {
-        connected = await freighterApi.isConnected();
-      } else if (hasIsAllowed) {
-        connected = await freighterApi.isAllowed();
+      if (typeof freighterApi?.isConnected === "function") {
+        const status = await freighterApi.isConnected();
+        connected = pickBoolean(status, "isConnected");
       }
 
       if (!connected) {
         throw new Error("Freighter extension is not available");
       }
 
-      let key = null;
-      if (typeof freighterApi?.getPublicKey === "function") {
-        key = await freighterApi.getPublicKey();
-      } else if (typeof freighterApi?.getAddress === "function") {
-        const addressResult = await freighterApi.getAddress();
-        key =
-          typeof addressResult === "string"
-            ? addressResult
-            : addressResult?.address || addressResult?.publicKey || null;
+      let key = "";
+      let addressResult = null;
+
+      if (typeof freighterApi?.isAllowed === "function") {
+        const allowedResult = await freighterApi.isAllowed();
+        const allowed = pickBoolean(allowedResult, "isAllowed");
+        const allowedError = pickErrorMessage(allowedResult);
+        if (allowedError) {
+          throw new Error(allowedError);
+        }
+
+        if (!allowed && typeof freighterApi?.requestAccess === "function") {
+          const accessResult = await freighterApi.requestAccess();
+          const accessError = pickErrorMessage(accessResult);
+          if (accessError) {
+            throw new Error(accessError);
+          }
+          key = pickAddress(accessResult);
+        }
+      }
+
+      if (!key && typeof freighterApi?.getPublicKey === "function") {
+        addressResult = await freighterApi.getPublicKey();
+        key = pickAddress(addressResult);
+      }
+
+      if (!key && typeof freighterApi?.getAddress === "function") {
+        addressResult = await freighterApi.getAddress();
+        key = pickAddress(addressResult);
+      }
+
+      const addressError = pickErrorMessage(addressResult);
+      if (addressError) {
+        throw new Error(addressError);
       }
 
       if (!key) {

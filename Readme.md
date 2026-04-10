@@ -68,18 +68,19 @@ Open in browser:
 ## Screenshots
 
 - Wallet connected state
-    /Stellar-Payment-dApp/public/wallet_connected.png
-
+    ![Wallet connected state](public/CONNETING_WALLET.png)
 
 - Balance card displayed
-
+    ![Balance dashboard](public/FUND_DASHBOARD.png)
 
 - Send XLM form in action
+    ![Send transaction form](public/TRANSACTION.png)
 
+- Live web page 
+    ![Live web page](public/LIVE_WEB_PAGE.png)
 
-- Success or failure transaction feedback
-
-
+- Send Transaction Status
+    ![Send transaction Status](public/failed_transaction.png)
 
 ## Project Structure
 
